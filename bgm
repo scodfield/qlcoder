@@ -1,0 +1,35 @@
+-module(bgm).
+-export([parse_bgm/0]).
+
+parse_bgm() ->
+	FileDir = "mix.mp3",
+	case file:open(FileDir,[read,raw,binary]) of 
+		{ok, File} ->
+			Size = filelib:file_size(FileDir),
+			{ok, HeadBin} = file:pread(File, 0, 10),
+			{ok, TailBin} = file:pread(File, Size-128, 128),
+			ID3V1 = parse_id3_v1(TailBin),
+			ID3V2 = parse_id3_v2(HeadBin),
+			file:close(File),
+		{error, Reason} -> io:format("sorry, it's wrong and Reason:~w~n",[Reason])
+	end.
+
+parse_id3_v1(<<$T,$A,$G, Title:30/binary, _Artist:30/binary, _Album:30/binary, Year:4/binary,
+	_Comment:30/binary, _Genre:8>>) ->
+	{"ID3V1", [{title, trim(Title)}, {year, Year}]};
+parse_id3_v1(_) -> error_id3_v1.
+
+parse_id3_v2(<<I:8,D:8,T:8,V:8, Rest/binary>>) ->
+	io:format("ID3:~w,~w,~w,~w~n",[I,D,T,V]),
+	Rest;
+parse_id3_v2(_) -> error_id3_v2.
+
+trim(Bin) -> 
+	erlang:list_to_binary(trim_blanks(erlang:binary_to_list(Bin))).
+
+trim_blanks(X) ->
+	lists:reverse(skip_blanks_and_zero(lists:reverse(X))).
+
+skip_blanks_and_zero([$\s | T]) -> skip_blanks_and_zero(T);
+skip_blanks_and_zero([0 | T]) -> skip_blanks_and_zero(T);
+skip_blanks_and_zero(X) -> X.
